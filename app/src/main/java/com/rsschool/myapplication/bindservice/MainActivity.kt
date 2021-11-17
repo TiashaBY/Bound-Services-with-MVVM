@@ -7,9 +7,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
+import androidx.lifecycle.lifecycleScope
 import com.rsschool.myapplication.bindservice.databinding.ActivityMainBinding
+import kotlinx.coroutines.flow.collect
 
 class MainActivity : AppCompatActivity() {
 
@@ -30,30 +31,27 @@ class MainActivity : AppCompatActivity() {
 
         viewModel = ViewModelProviders.of(this).get(MainActivityViewModel::class.java)
 
-        viewModel.mBinder.observe(
-            this,
-            object : Observer<MyService.MyBinder?> {
-                override fun onChanged(myBinder: MyService.MyBinder?) {
-                    if (myBinder == null) {
-                        Log.d("TAG", "onChanged: unbound from service")
-                    } else {
-                        Log.d("TAG", "onChanged: bound to service.")
-                        service = myBinder.service
-                    }
+        lifecycleScope.launchWhenStarted {
+            viewModel.mBinder.collect { myBinder ->
+               if (myBinder == null) {
+                    Log.d("TAG", "onChanged: unbound from service")
+                } else {
+                    Log.d("TAG", "onChanged: bound to service.")
+                    service = myBinder.service
                 }
-            })
+            }
+        }
 
-        viewModel.mIsProgressUpdating.observe(
-            this,
-            object : Observer<Boolean> {
-                override fun onChanged(t: Boolean) {
+        lifecycleScope.launchWhenStarted {
+        viewModel.mIsProgressUpdating.collect()
+            { t ->
                     val handler = Handler(Looper.getMainLooper())
                     val runnable = object : Runnable {
                         override fun run() {
                             if (t) {
                                 if (viewModel.getBinder().value != null) {
                                     if (service?.mProgress == service?.mMaxValue) {
-                                        viewModel.mIsProgressUpdating.postValue(false)
+                                        viewModel._mIsProgressUpdating.value = false
                                     }
                                     binding.progressBar.apply {
                                         progress = service?.mProgress!!
@@ -83,11 +81,9 @@ class MainActivity : AppCompatActivity() {
                                 binding.button.setText("Start")
                             }
                         }
-
-                }
-
-            })
         }
+        }
+    }
 
     private fun toggleUpdates() {
         if (service != null) {
@@ -97,10 +93,10 @@ class MainActivity : AppCompatActivity() {
             } else {
                 if (service?.mIsPaused == true) {
                     service?.unPausePretendLongRunningTask()
-                    viewModel.mIsProgressUpdating.value = true
+                    viewModel._mIsProgressUpdating.value = true
                 } else {
                     service?.pausePretendLongRunningTask()
-                    viewModel.mIsProgressUpdating.value = false
+                    viewModel._mIsProgressUpdating.value = false
                 }
             }
         }
@@ -124,4 +120,5 @@ class MainActivity : AppCompatActivity() {
 
     }
 }
+
 
